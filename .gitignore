@@ -25,3 +25,6 @@ cabal.project.local~
 .stack-work/
 *~
 bf/*
+stack.yaml.lock
+ChangeLog.md
+.vscode/*
