@@ -27,31 +27,24 @@ pattern BFbracket2 :: Char
 pattern BFbracket2 = ']'
 
 eval :: ((Map Int Int, Int), String) -> IO ((Map Int Int, Int), String)
--- '.'
 eval ((ss, s), BFout : cs) = do
     putChar . chr . fromJust $ lookup s ss <|> pure 0
     flushStdHandles
     eval ((ss, s), cs)
--- ','
 eval ((ss, s), BFin : cs) = do
     x <- getChar
     eval ((insert s (ord x) ss, s), cs)
--- '+'
 eval ((ss, s), BFplus : cs) = do
     eval ((insert s ((v + 1) `mod` 256) ss, s), cs)
   where
     v = fromJust (lookup s ss <|> pure 0)
--- '-'
 eval ((ss, s), BFminus : cs)
     | v == 0 = eval ((insert s 255 ss, s), cs)
     | otherwise = eval ((insert s (v - 1) ss, s), cs)
   where
     v = fromJust (lookup s ss <|> pure 0)
--- '<'
 eval ((ss, s), BFleft : cs) = eval ((ss, s - 1), cs)
--- '>'
 eval ((ss, s), BFright : cs) = eval ((ss, s + 1), cs)
--- '['
 eval ((ss, s), BFbracket1 : cs)
     | (lookup s ss <|> pure 0) == Just 0 = eval ((ss, s), f drop cs)
     | otherwise = do
@@ -73,7 +66,5 @@ eval ((ss, s), BFbracket1 : cs)
                 )
                 id
 
--- empty
 eval (x, []) = pure (x, [])
--- default
 eval (s', c : cs) = eval (s', cs)
