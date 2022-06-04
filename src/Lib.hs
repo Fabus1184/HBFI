@@ -1,11 +1,13 @@
 {-# LANGUAGE PatternSynonyms #-}
 
-module Lib (eval) where
+module Lib where
 
 import Control.Applicative ((<|>))
+import Control.Monad.State (MonadIO (liftIO), MonadState (get, put), StateT (runStateT))
 import Data.Char (chr, ord)
-import Data.Map (Map, insert, lookup)
+import Data.Map (Map, findWithDefault, insert)
 import Data.Maybe (fromJust)
+import Foreign.C (CUChar)
 import GHC.TopHandler (flushStdHandles)
 import Prelude hiding (lookup)
 
@@ -26,30 +28,41 @@ pattern BFbracket1 = '['
 pattern BFbracket2 :: Char
 pattern BFbracket2 = ']'
 
-eval :: ((Map Int Int, Int), String) -> IO ((Map Int Int, Int), String)
-eval ((ss, s), BFout : cs) = do
-    putChar . chr . fromJust $ lookup s ss <|> pure 0
-    flushStdHandles
-    eval ((ss, s), cs)
-eval ((ss, s), BFin : cs) = do
-    x <- getChar
-    eval ((insert s (ord x) ss, s), cs)
-eval ((ss, s), BFplus : cs) = do
-    eval ((insert s ((v + 1) `mod` 256) ss, s), cs)
-  where
-    v = fromJust (lookup s ss <|> pure 0)
-eval ((ss, s), BFminus : cs)
-    | v == 0 = eval ((insert s 255 ss, s), cs)
-    | otherwise = eval ((insert s (v - 1) ss, s), cs)
-  where
-    v = fromJust (lookup s ss <|> pure 0)
-eval ((ss, s), BFleft : cs) = eval ((ss, s - 1), cs)
-eval ((ss, s), BFright : cs) = eval ((ss, s + 1), cs)
-eval ((ss, s), BFbracket1 : cs)
-    | (lookup s ss <|> pure 0) == Just 0 = eval ((ss, s), f drop cs)
-    | otherwise = do
-        ((ss', s'), []) <- eval ((ss, s), f take cs)
-        eval ((ss', s'), BFbracket1 : cs)
+eval :: String -> StateT (Map Int CUChar, Int) IO String
+eval [] = pure (pure $ toEnum 0)
+eval (BFout : is) = do
+    (ss, s) <- get
+    liftIO . putChar . chr . fromEnum $ findWithDefault 0 s ss
+    liftIO flushStdHandles
+    eval is
+eval (BFin : is) = do
+    (ss, s) <- get
+    i <- liftIO getChar
+    put (insert s (toEnum $ ord i) ss, s)
+    eval is
+eval (BFplus : is) = do
+    (ss, s) <- get
+    put (insert s (findWithDefault 0 s ss + 1) ss, s)
+    eval is
+eval (BFminus : is) = do
+    (ss, s) <- get
+    put (insert s (findWithDefault 0 s ss - 1) ss, s)
+    eval is
+eval (BFleft : is) = do
+    (ss, s) <- get
+    put (ss, s + 1)
+    eval is
+eval (BFright : is) = do
+    (ss, s) <- get
+    put (ss, s - 1)
+    eval is
+eval (BFbracket1 : is) = do
+    (ss, s) <- get
+    if findWithDefault 0 s ss == 0
+        then eval (f drop is)
+        else do
+            eval (f take is)
+            eval (BFbracket1 : is)
   where
     f x =
         uncurry x
@@ -65,6 +78,4 @@ eval ((ss, s), BFbracket1 : cs)
                         (False, (0, 0))
                 )
                 id
-
-eval (x, []) = pure (x, [])
-eval (s', c : cs) = eval (s', cs)
+eval (i : is) = eval is

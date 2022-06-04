@@ -3,6 +3,7 @@ module Main (main) where
 import Lib (eval)
 
 import Control.Monad (void)
+import Control.Monad.State (evalStateT)
 import Data.List (intercalate)
 import System.Environment (getArgs)
 import System.Exit (exitFailure, exitSuccess)
@@ -12,7 +13,7 @@ main :: IO ()
 main = do
     k <- getArgs >>= parseArgs
     c <- readFile k
-    void $ eval ((mempty, 0), c)
+    void $ evalStateT (eval c) (pure 0)
   where
     parseArgs [] = parseArgs ["--help"]
     parseArgs ("--help" : xs) = do
@@ -20,13 +21,14 @@ main = do
             intercalate
                 "\n"
                 [ "Usage:"
-                , "\thbfi File"
+                , "\thbfi File [options]"
                 , ""
                 , "Options:"
                 , "\t--help\t\t\tshow this message"
                 ]
         exitSuccess
     parseArgs [f] = pure f
+    parseArgs [f, "--debug"] = pure f
     parseArgs xs = do
-        hPutStrLn stderr $ "Unrecognized options: " ++ intercalate "," xs
+        hPutStrLn stderr $ "Unrecognized option(s): " ++ intercalate "," xs
         exitFailure
